@@ -130,20 +130,89 @@ void print_pointer(int* pointer, int size, int max_inline = -1) {
     }
 }
 
+__device__ bool device_check_col(int* board, int col) {
+    bool col_values[9] = {false};
+    for (int i = 0; i < 9; i++) {
+        if (!board[i * 9 + col]) continue;
+        if (col_values[board[i * 9 + col] - 1]) return false;
+        else col_values[board[i * 9 + col] - 1] = true;
+    }
+    return true;
+}
+
+__device__ bool device_check_row(int* board, int row) {
+    bool row_values[9] = { false };
+    for (int i = 0; i < 9; i++) {
+        if (!board[row * 9 + i]) continue;
+        if (row_values[board[row * 9 + i] - 1]) return false;
+        else row_values[board[row * 9 + i] - 1] = true;
+    }
+    return true;
+}
+
+__device__ bool device_check_subsquare(int* board, int square) {
+    bool square_values[9] = { false };
+    int row = (square / 3) * 3, col = (square % 3) * 3;
+    int start_cell = row * 9 + col;
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            int index = start_cell + i * 9 + j;
+            if (!board[index]) continue;
+            if (square_values[board[index] - 1]) return false;
+            else square_values[board[index] - 1] = true;
+        }
+    }
+    return true;
+}
+
+__global__ void device_validity_all(int* board, bool* status) {
+    int gid = threadIdx.x + threadIdx.y * blockDim.x + threadIdx.z * blockDim.x * blockDim.y;
+    int oid = gid; //Operation id
+    if (gid < 9) {
+        status&& device_check_col(board, oid);
+    }
+    else if (gid < 18) {
+        //TODO device check row
+        oid -= 9;
+        status&& device_check_row(board, oid);
+    }
+    else if (gid < 27) {
+        //TODO device check subsquare
+        oid -= 18;
+        status&& device_check_subsquare(board, oid);
+    }
+}
+
 int main()
 {
     int* host_pointer;
+    int* device_pointer;
+    int* sudoku_board;
+    dim3 blockSize(3, 3, 3);
+    dim3 gridSize(1, 1, 1);
     // 81 because sudoku boards always have 81 values
     host_pointer = (int*)malloc(sizeof(int) * 81);
+    cudaMalloc((void**)&device_pointer, sizeof(int) * 81);
+    sudoku_board = (int*)malloc(sizeof(int) * 81);
     for (int i = 0; i < 81; i++) {
         int row = i / 9;
         int col = i % 9;
         host_pointer[i] = board[row][col];
+        sudoku_board[i] = board[row][col];
     }
-    int board_status = host_solve_sudoku(host_pointer);
+    cudaMemcpy(device_pointer, host_pointer, sizeof(int) * 81, cudaMemcpyHostToDevice);
+    bool status = true;
+    device_validity_all << <gridSize, blockSize >> > (device_pointer, &status);
+    cudaDeviceSynchronize();
+    if (!status) printf("\nThe format of the is not valid");
+    else printf("\nFormat is valid");
+    /*int board_status = host_solve_sudoku(host_pointer);
     if (board_status == -1) printf("\nThe format of the is not valid");
     else if (board_status == 0) printf("\nNo valid solution was found");
-    else printf("\nA solution was found");
+    else printf("\nA solution was found");*/
     //printf("\nThe format of the board is: %d", host_check_all(host_pointer));
     print_pointer(host_pointer, 81, 9);
+    free(host_pointer);
+    free(sudoku_board);
+    cudaFree(device_pointer);
 }
