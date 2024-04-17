@@ -63,6 +63,56 @@ bool host_check_subsquare(int* board, int sub) {
     return 1;
 }
 
+bool host_check_subsquare(int* board, int col, int row) {
+    int sub = col / 3 + (row / 3) * 3;
+    return host_check_subsquare(board, sub);
+}
+
+bool host_check_all(int* board) {
+    bool format = true;
+    for (int i = 0; i < 9; i++) {
+        format = format && host_check_row(board, i);
+    }
+    for (int i = 0; i < 9; i++) {
+        format = format && host_check_col(board, i);
+    }
+    for (int i = 0; i < 9; i++) {
+        format = format && host_check_subsquare(board, i);
+    }
+    return format;
+}
+
+bool host_check_validity(int* board, int n, int col, int row) {
+    for (int i = 0; i < 9; i++)
+        if (board[row * 9 + i] == n || board[i * 9 + col] == n) return false;
+    int sub_row_start = (row / 3) * 3;
+    int sub_col_start = (col / 3) * 3;
+    for (int i = sub_row_start; i < sub_row_start + 3; i++)
+        for (int j = sub_col_start; j < sub_col_start + 3; j++)
+            if (board[i * 9 + j] == n) return false;
+    return true;
+}
+
+int host_solve_sudoku(int* board) {
+    if (!host_check_all(board)) return -1; // Board is not valid
+    for (int row = 0; row < 9; row++) {
+        for (int col = 0; col < 9; col++) {
+            int index = col + row * 9;
+            if (!board[index]) {
+                for (int i = 1; i <= 9; i++) {
+                    if (host_check_validity(board, i, col, row)) {
+                        board[index] = i;
+                        if (host_solve_sudoku(board)) return 1;
+                        else board[index] = 0;
+                    }
+                }
+                return 0;
+            }
+        }
+    }
+    return 1;
+}
+
 void print_pointer(int* pointer, int size, int max_inline = -1) {
     if (max_inline <= 0) {
         for (int i = 0; i < size; i++) printf("\n%d", pointer[i]);
@@ -90,16 +140,10 @@ int main()
         int col = i % 9;
         host_pointer[i] = board[row][col];
     }
-    bool format = true;
-    for (int i = 0; i < 9; i++) {
-        format = format && host_check_row(host_pointer, i);
-    }
-    for (int i = 0; i < 9; i++) {
-        format = format && host_check_col(host_pointer, i);
-    }
-    for (int i = 0; i < 9; i++) {
-        format = format && host_check_subsquare(host_pointer, i);
-    }
-    printf("\nThe format of the board is: %d", format);
+    int board_status = host_solve_sudoku(host_pointer);
+    if (board_status == -1) printf("\nThe format of the is not valid");
+    else if (board_status == 0) printf("\nNo valid solution was found");
+    else printf("\nA solution was found");
+    //printf("\nThe format of the board is: %d", host_check_all(host_pointer));
     print_pointer(host_pointer, 81, 9);
 }
